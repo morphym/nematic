@@ -3,7 +3,7 @@
 This workspace contains two deliberately separated machines:
 
 - [`smc`](smc) supplies numeric choice material through its `Smc` stream API.
-- [`celm`](celm) deterministically maps an explicit choice state into a verified controlled-English semantic fiber.
+- [`celm`](celm) deterministically maps an explicit choice state through a frozen WordNet and Brown-corpus English profile.
 
 The boundary matters: SMC output is data supplied to CELM. CELM does not infer the data's origin, agency, or entropy quality, and explicit numeric test vectors bypass SMC entirely.
 
@@ -11,13 +11,13 @@ The boundary matters: SMC output is data supplied to CELM. CELM does not infer t
 SMC or explicit test vector
             |
             v
-  ChoiceState (L, N) + IntentFrame
+      ChoiceState (L, N) + requested length
             |
             v
- deterministic mixed-radix decoder
+ WordNet lexicon + corpus-derived syntax
             |
             v
- sentence + typed derivation + rank + residual + audit trace
+ sentence + tagged derivation + residual + audit trace
             |
             v
  exact profile verifier

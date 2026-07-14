@@ -1,6 +1,6 @@
 # CELM
 
-CELM is a deterministic Rust machine that maps a canonically framed integer to a controlled-English realization of an explicit semantic intent.
+CELM is a deterministic Rust machine that maps a canonically framed integer into English through frozen lexical and corpus data.
 
 The CELM core does not create entropy or infer agency. Its input is a `(declared_bits, integer)` choice state. An optional adapter obtains that state from the sibling [`smc`](../smc) crate; explicit test vectors produce reproducible output without SMC.
 
@@ -16,6 +16,9 @@ The CELM core does not create entropy or infer agency. Its input is a `(declared
 - Explicit-number and SMC-source CLI modes.
 - Free generation where the number selects both meaning and wording.
 - Exact requested sentence lengths from 3 through 4,096 words.
+- Princeton WordNet 3.1 nouns, verbs, adjectives, and adverbs.
+- Complete POS patterns and lexical frequencies learned from the tagged Brown corpus.
+- Every accepted WordNet entry remains reachable; corpus-observed words receive higher integer weight.
 
 ## Run
 
@@ -30,11 +33,17 @@ cargo test
 ```
 
 `generate <words> [choice-bits]` requires no semantic intent from the terminal.
-The default choice size is `max(256, words * 8)` bits. The reproducible
+The default choice size is `max(256, words * 48)` bits. The reproducible
 `generate-explicit` form accepts a framed hexadecimal choice instead.
 
 Every successful run prints the sentence, choice state, rank, fiber size, residual, exact-verification result, reconstructed integer, frozen versions, and choice trace.
 
+## How free generation works
+
+For a requested length represented in Brown, the number first selects a complete observed part-of-speech pattern. Corpus function and inflected words preserve the observed grammatical structure. Base-form nouns, verbs, adjectives, and adverbs are selected from frequency-weighted tables extended by WordNet. For lengths absent from the corpus, a weighted POS transition graph provides the fallback.
+
+The source datasets and hashes are recorded in [`../data/README.md`](../data/README.md).
+
 ## Exactness boundary
 
-“Exact” means equality inside the frozen CELM-EN1 formal profile. It does not claim unrestricted English equivalence, cryptographic security, source independence, true randomness, consciousness, or communication by an external entity.
+“Exact” means deterministic replay, exact word count, profile membership, and integer recovery. Corpus-derived syntax can produce unusual or semantically surreal English, especially because all dictionary entries—including rare and archaic ones—remain selectable. It does not claim unrestricted semantic equivalence, cryptographic security, source independence, true randomness, consciousness, or communication by an external entity.

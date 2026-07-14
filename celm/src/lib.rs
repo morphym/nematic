@@ -845,7 +845,10 @@ fn recover_from_trace(residual: &BigNat, trace: &[TraceEvent]) -> Result<BigNat,
 /// Provides enough source bits to keep long generated sentences varied while
 /// retaining a 256-bit minimum for ordinary terminal use.
 pub fn recommended_choice_bits(words: usize) -> u32 {
-    let scaled = words.saturating_mul(8).min(u32::MAX as usize) as u32;
+    // Corpus-pattern selection plus weighted lexical selection consumes up to
+    // roughly 20 bits per word in the current profile. The larger allowance
+    // prevents a long zero-residual suffix while retaining exact recovery.
+    let scaled = words.saturating_mul(48).min(u32::MAX as usize) as u32;
     scaled.max(256)
 }
 
@@ -1142,6 +1145,6 @@ mod tests {
         assert!(generate(&choice, MIN_GENERATED_WORDS - 1).is_err());
         assert!(generate(&choice, MAX_GENERATED_WORDS + 1).is_err());
         assert_eq!(recommended_choice_bits(3), 256);
-        assert_eq!(recommended_choice_bits(100), 800);
+        assert_eq!(recommended_choice_bits(100), 4800);
     }
 }

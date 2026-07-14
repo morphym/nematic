@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const ENGLISH_PROFILE_VERSION: &str = "wordnet-3.1+brown-1979-pos1-v0.1";
+pub const ENGLISH_PROFILE_VERSION: &str = "wordnet-3.1+brown-1979-pattern-v0.2";
 const START: &str = "<START>";
 const END: &str = "<END>";
 
@@ -56,12 +56,25 @@ struct Transition {
     weight: u32,
 }
 
+#[derive(Clone, Debug)]
+struct LexicalForm {
+    word: String,
+    weight: u32,
+}
+
+#[derive(Clone, Debug)]
+struct PatternToken {
+    tag_id: usize,
+    corpus_word: String,
+}
+
 /// A compiled probabilistic language profile. Candidate tables are sorted, so
 /// identical datasets and numeric input produce identical output everywhere.
 pub struct EnglishProfile {
     tags: Vec<String>,
-    words: Vec<Vec<String>>,
+    words: Vec<Vec<LexicalForm>>,
     transitions: Vec<Vec<Transition>>,
+    patterns: BTreeMap<usize, Vec<Vec<PatternToken>>>,
     start: usize,
     end: usize,
     stats: EnglishProfileStats,
@@ -85,8 +98,9 @@ impl EnglishProfile {
         let adjectives = load_wordnet_index(&wordnet.join("index.adj"))?;
         let adverbs = load_wordnet_index(&wordnet.join("index.adv"))?;
 
-        let mut tag_words: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut tag_words: BTreeMap<String, BTreeMap<String, u32>> = BTreeMap::new();
         let mut transition_counts: BTreeMap<(String, String), u32> = BTreeMap::new();
+        let mut corpus_patterns = Vec::new();
         let mut corpus_sentences = 0usize;
         let mut corpus_tokens = 0usize;
 
@@ -114,40 +128,34 @@ impl EnglishProfile {
                     if tag.is_empty() || is_punctuation_tag(&tag) {
                         continue;
                     }
-                    tag_words.entry(tag.clone()).or_default().insert(word);
-                    tagged.push(tag);
+                    let weight = tag_words
+                        .entry(tag.clone())
+                        .or_default()
+                        .entry(word.clone())
+                        .or_default();
+                    *weight = weight.saturating_add(16);
+                    tagged.push((tag, word));
                 }
                 if tagged.is_empty() {
                     continue;
                 }
                 corpus_sentences += 1;
                 corpus_tokens += tagged.len();
-                increment(&mut transition_counts, START, &tagged[0]);
+                corpus_patterns.push(tagged.clone());
+                increment(&mut transition_counts, START, &tagged[0].0);
                 for pair in tagged.windows(2) {
-                    increment(&mut transition_counts, &pair[0], &pair[1]);
+                    increment(&mut transition_counts, &pair[0].0, &pair[1].0);
                 }
-                increment(&mut transition_counts, tagged.last().unwrap(), END);
+                increment(&mut transition_counts, &tagged.last().unwrap().0, END);
             }
         }
 
         // Base-form Brown tags are opened to all single-token WordNet lemmas.
         // Inflected forms and function words remain corpus-derived.
-        tag_words
-            .entry("NN".into())
-            .or_default()
-            .extend(nouns.iter().cloned());
-        tag_words
-            .entry("VB".into())
-            .or_default()
-            .extend(verbs.iter().cloned());
-        tag_words
-            .entry("JJ".into())
-            .or_default()
-            .extend(adjectives.iter().cloned());
-        tag_words
-            .entry("RB".into())
-            .or_default()
-            .extend(adverbs.iter().cloned());
+        extend_dictionary(tag_words.entry("NN".into()).or_default(), &nouns);
+        extend_dictionary(tag_words.entry("VB".into()).or_default(), &verbs);
+        extend_dictionary(tag_words.entry("JJ".into()).or_default(), &adjectives);
+        extend_dictionary(tag_words.entry("RB".into()).or_default(), &adverbs);
 
         if corpus_sentences == 0 || tag_words.is_empty() {
             return Err(Error::Data(
@@ -185,10 +193,34 @@ impl EnglishProfile {
             candidates.sort_by_key(|candidate| candidate.to);
         }
 
-        let words: Vec<Vec<String>> = tags
+        let words: Vec<Vec<LexicalForm>> = tags
             .iter()
-            .map(|tag| tag_words.remove(tag).unwrap().into_iter().collect())
+            .map(|tag| {
+                tag_words
+                    .remove(tag)
+                    .unwrap()
+                    .into_iter()
+                    .map(|(word, weight)| LexicalForm { word, weight })
+                    .collect()
+            })
             .collect();
+        let mut patterns: BTreeMap<usize, Vec<Vec<PatternToken>>> = BTreeMap::new();
+        for pattern in corpus_patterns {
+            let tokens: Vec<_> = pattern
+                .iter()
+                .map(|(tag, word)| {
+                    let tag_id = tag_ids
+                        .get(tag)
+                        .copied()
+                        .ok_or_else(|| Error::Data(format!("unknown pattern tag {tag}")))?;
+                    Ok(PatternToken {
+                        tag_id,
+                        corpus_word: word.clone(),
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+            patterns.entry(tokens.len()).or_default().push(tokens);
+        }
         let lexical_forms = words.iter().map(Vec::len).sum();
         let transition_total = transitions.iter().map(Vec::len).sum();
         let stats = EnglishProfileStats {
@@ -206,6 +238,7 @@ impl EnglishProfile {
             tags,
             words,
             transitions,
+            patterns,
             start,
             end,
             stats,
@@ -226,42 +259,43 @@ impl EnglishProfile {
                 "requested word count must be between 3 and 4096",
             ));
         }
-        let reachable = self.reachability(requested_words);
-        if !reachable[requested_words][self.start] {
-            return Err(Error::NoRealization(
-                "corpus transition model cannot terminate at that word count",
-            ));
-        }
-
         let mut residual = choice.integer.clone();
         let mut trace = Vec::with_capacity(requested_words * 2);
-        let mut current = self.start;
+        let tag_sequence: Vec<(usize, Option<String>)> =
+            if let Some(patterns) = self.patterns.get(&requested_words) {
+                let before = residual.to_string();
+                let index = residual.div_rem_small(patterns.len() as u32);
+                trace.push(TraceEvent {
+                    field: "english_pattern",
+                    radix: patterns.len() as u32,
+                    index,
+                    candidate_id: index,
+                    residual_before: before,
+                    residual_after: residual.to_string(),
+                });
+                patterns[index as usize]
+                    .iter()
+                    .map(|token| (token.tag_id, Some(token.corpus_word.clone())))
+                    .collect()
+            } else {
+                self.select_tag_sequence(requested_words, &mut residual, &mut trace)?
+                    .into_iter()
+                    .map(|tag_id| (tag_id, None))
+                    .collect()
+            };
         let mut selected = Vec::with_capacity(requested_words);
 
-        for remaining in (1..=requested_words).rev() {
-            let candidates: Vec<_> = self.transitions[current]
-                .iter()
-                .copied()
-                .filter(|transition| {
-                    transition.to != self.end && reachable[remaining - 1][transition.to]
-                })
-                .collect();
-            let tag_id = select_transition(&mut residual, &candidates, &mut trace)?;
-            let forms = &self.words[tag_id];
-            let word_index = residual.div_rem_small(forms.len() as u32);
-            trace.push(TraceEvent {
-                field: "english_word",
-                radix: forms.len() as u32,
-                index: word_index,
-                candidate_id: word_index,
-                residual_before: String::new(),
-                residual_after: residual.to_string(),
-            });
+        for (tag_id, corpus_word) in tag_sequence {
+            let word = match corpus_word {
+                Some(word) if !dictionary_open_tag(&self.tags[tag_id]) => word,
+                _ => select_word(&mut residual, &self.words[tag_id], &mut trace)?
+                    .word
+                    .clone(),
+            };
             selected.push(TaggedWord {
                 tag: self.tags[tag_id].clone(),
-                word: forms[word_index as usize].clone(),
+                word,
             });
-            current = tag_id;
         }
 
         let meaning = EnglishMeaning { words: selected };
@@ -298,7 +332,9 @@ impl EnglishProfile {
             let Ok(tag_id) = self.tags.binary_search(&tagged.tag) else {
                 return false;
             };
-            if self.words[tag_id].binary_search(&tagged.word).is_err()
+            if self.words[tag_id]
+                .binary_search_by(|form| form.word.as_str().cmp(&tagged.word))
+                .is_err()
                 || !self.transitions[current]
                     .iter()
                     .any(|transition| transition.to == tag_id)
@@ -314,6 +350,34 @@ impl EnglishProfile {
 
     pub fn recover_integer(&self, output: &EnglishOutput) -> Result<BigNat, Error> {
         recover_from_trace(&output.residual, &output.trace)
+    }
+
+    fn select_tag_sequence(
+        &self,
+        requested_words: usize,
+        residual: &mut BigNat,
+        trace: &mut Vec<TraceEvent>,
+    ) -> Result<Vec<usize>, Error> {
+        let reachable = self.reachability(requested_words);
+        if !reachable[requested_words][self.start] {
+            return Err(Error::NoRealization(
+                "corpus transition model cannot terminate at that word count",
+            ));
+        }
+        let mut current = self.start;
+        let mut sequence = Vec::with_capacity(requested_words);
+        for remaining in (1..=requested_words).rev() {
+            let candidates: Vec<_> = self.transitions[current]
+                .iter()
+                .copied()
+                .filter(|transition| {
+                    transition.to != self.end && reachable[remaining - 1][transition.to]
+                })
+                .collect();
+            current = select_transition(residual, &candidates, trace)?;
+            sequence.push(current);
+        }
+        Ok(sequence)
     }
 
     fn reachability(&self, requested_words: usize) -> Vec<Vec<bool>> {
@@ -366,6 +430,50 @@ fn select_transition(
     Ok(selected.to)
 }
 
+fn select_word<'a>(
+    residual: &mut BigNat,
+    candidates: &'a [LexicalForm],
+    trace: &mut Vec<TraceEvent>,
+) -> Result<&'a LexicalForm, Error> {
+    let total: u64 = candidates
+        .iter()
+        .map(|candidate| candidate.weight as u64)
+        .sum();
+    if total == 0 || total > u32::MAX as u64 {
+        return Err(Error::Data("invalid lexical weight total".into()));
+    }
+    let before = residual.to_string();
+    let roll = residual.div_rem_small(total as u32);
+    let mut boundary = 0u32;
+    let (candidate_id, selected) = candidates
+        .iter()
+        .enumerate()
+        .find(|(_, candidate)| {
+            boundary = boundary.saturating_add(candidate.weight);
+            roll < boundary
+        })
+        .ok_or_else(|| Error::Data("weighted lexical interval was incomplete".into()))?;
+    trace.push(TraceEvent {
+        field: "english_word",
+        radix: total as u32,
+        index: roll,
+        candidate_id: candidate_id as u32,
+        residual_before: before,
+        residual_after: residual.to_string(),
+    });
+    Ok(selected)
+}
+
+fn extend_dictionary(forms: &mut BTreeMap<String, u32>, dictionary: &[String]) {
+    for word in dictionary {
+        forms.entry(word.clone()).or_insert(1);
+    }
+}
+
+fn dictionary_open_tag(tag: &str) -> bool {
+    matches!(tag, "NN" | "VB" | "JJ" | "RB")
+}
+
 fn load_wordnet_index(path: &Path) -> Result<Vec<String>, Error> {
     let contents = fs::read_to_string(path).map_err(|error| data_error(path, error))?;
     let mut words = BTreeSet::new();
@@ -376,7 +484,10 @@ fn load_wordnet_index(path: &Path) -> Result<Vec<String>, Error> {
         let Some(lemma) = line.split_whitespace().next() else {
             continue;
         };
-        let lemma = lemma.to_ascii_lowercase();
+        // WordNet writes lexicalized phrases with underscores. Hyphenating
+        // them preserves each entry while keeping CELM's orthographic word
+        // count stable.
+        let lemma = lemma.to_ascii_lowercase().replace('_', "-");
         if is_single_dictionary_word(&lemma) {
             words.insert(lemma);
         }
@@ -439,12 +550,22 @@ fn increment(counts: &mut BTreeMap<(String, String), u32>, from: &str, to: &str)
 }
 
 fn render(meaning: &EnglishMeaning) -> String {
-    let mut sentence = meaning
+    let mut words: Vec<String> = meaning
         .words
         .iter()
-        .map(|tagged| tagged.word.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
+        .map(|tagged| tagged.word.clone())
+        .collect();
+    for index in 0..words.len().saturating_sub(1) {
+        let begins_with_vowel = words[index + 1].chars().next().is_some_and(|letter| {
+            matches!(letter.to_ascii_lowercase(), 'a' | 'e' | 'i' | 'o' | 'u')
+        });
+        if words[index] == "a" && begins_with_vowel {
+            words[index] = "an".into();
+        } else if words[index] == "an" && !begins_with_vowel {
+            words[index] = "a".into();
+        }
+    }
+    let mut sentence = words.join(" ");
     if let Some(first) = sentence.get_mut(0..1) {
         first.make_ascii_uppercase();
     }

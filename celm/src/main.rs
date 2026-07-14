@@ -76,6 +76,7 @@ fn generated_or_exit(
 }
 
 fn print_generated(profile: &EnglishProfile, choice: &ChoiceState, output: &EnglishOutput) {
+    let stats = profile.stats();
     println!("sentence: {}", output.sentence);
     println!(
         "length: {} words (requested {})",
@@ -101,6 +102,10 @@ fn print_generated(profile: &EnglishProfile, choice: &ChoiceState, output: &Engl
         profile.recover_integer(output).unwrap().to_hex()
     );
     println!("choices consumed: {}", output.trace.len());
+    println!(
+        "language profile: {} lexical forms, {} corpus sentences, {} POS tags",
+        stats.lexical_forms, stats.corpus_sentences, stats.tags
+    );
     println!(
         "versions: {}, {}, {}",
         output.profile_version, output.grammar_version, output.lexicon_version
