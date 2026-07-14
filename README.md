@@ -33,6 +33,12 @@ cargo clippy -p celm --all-targets -- -D warnings
 Run CELM with a fixed choice or SMC input:
 
 ```sh
+cargo run -p celm -- generate 12
+cargo run -p celm -- generate-explicit 12 256 8F2A00000000000000000000000000000000000000000000000000000000D91C
 cargo run -p celm -- explicit 8 1D door open
 cargo run -p celm -- smc 256 engine active present positive
 ```
+
+`generate <words>` asks only for an exact word count. SMC supplies the numeric
+choice, and CELM chooses both the formal meaning and its controlled-English
+realization. Supported lengths are 3 through 4,096 words.

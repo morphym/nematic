@@ -7,6 +7,12 @@
 use sm_c::Smc;
 use std::fmt;
 
+mod english;
+pub use english::{
+    ENGLISH_PROFILE_VERSION, EnglishMeaning, EnglishOutput, EnglishProfile, EnglishProfileStats,
+    TaggedWord,
+};
+
 pub const SPEC_VERSION: &str = "CELM-EN1-0.1";
 pub const GRAMMAR_VERSION: &str = "celm-en1-grammar-0.1";
 pub const LEXICON_VERSION: &str = "celm-en1-lexicon-0.1";
@@ -261,6 +267,7 @@ pub struct Output {
 pub enum Error {
     InvalidNumber(&'static str),
     NoRealization(&'static str),
+    Data(String),
     VerificationFailure,
 }
 
@@ -269,6 +276,7 @@ impl fmt::Display for Error {
         match self {
             Self::InvalidNumber(message) => write!(formatter, "invalid choice state: {message}"),
             Self::NoRealization(message) => write!(formatter, "no realization: {message}"),
+            Self::Data(message) => write!(formatter, "English profile data error: {message}"),
             Self::VerificationFailure => {
                 write!(formatter, "generated derivation failed exact verification")
             }
@@ -454,51 +462,153 @@ const ADVERB_FORMS: &[Token] = &[
 ];
 
 const FREE_SUBJECTS: &[Token] = &[
-    Token { id: 5001, text: "the engine" },
-    Token { id: 5002, text: "the system" },
-    Token { id: 5003, text: "the runtime" },
-    Token { id: 5004, text: "the service" },
-    Token { id: 5005, text: "the network" },
-    Token { id: 5006, text: "the process" },
-    Token { id: 5007, text: "the device" },
-    Token { id: 5008, text: "the mechanism" },
+    Token {
+        id: 5001,
+        text: "the engine",
+    },
+    Token {
+        id: 5002,
+        text: "the system",
+    },
+    Token {
+        id: 5003,
+        text: "the runtime",
+    },
+    Token {
+        id: 5004,
+        text: "the service",
+    },
+    Token {
+        id: 5005,
+        text: "the network",
+    },
+    Token {
+        id: 5006,
+        text: "the process",
+    },
+    Token {
+        id: 5007,
+        text: "the device",
+    },
+    Token {
+        id: 5008,
+        text: "the mechanism",
+    },
 ];
 
 const FREE_VERBS: &[Token] = &[
-    Token { id: 5101, text: "operates" },
-    Token { id: 5102, text: "functions" },
-    Token { id: 5103, text: "responds" },
-    Token { id: 5104, text: "continues" },
+    Token {
+        id: 5101,
+        text: "operates",
+    },
+    Token {
+        id: 5102,
+        text: "functions",
+    },
+    Token {
+        id: 5103,
+        text: "responds",
+    },
+    Token {
+        id: 5104,
+        text: "continues",
+    },
 ];
 
 const FREE_ADVERBS: &[Token] = &[
-    Token { id: 5201, text: "steadily" },
-    Token { id: 5202, text: "reliably" },
-    Token { id: 5203, text: "quietly" },
-    Token { id: 5204, text: "independently" },
-    Token { id: 5205, text: "continuously" },
-    Token { id: 5206, text: "efficiently" },
+    Token {
+        id: 5201,
+        text: "steadily",
+    },
+    Token {
+        id: 5202,
+        text: "reliably",
+    },
+    Token {
+        id: 5203,
+        text: "quietly",
+    },
+    Token {
+        id: 5204,
+        text: "independently",
+    },
+    Token {
+        id: 5205,
+        text: "continuously",
+    },
+    Token {
+        id: 5206,
+        text: "efficiently",
+    },
 ];
 
 // Every adjunct is exactly two orthographic words. This gives the grammar an
 // exact length construction without filler tokens or truncation.
 const FREE_ADJUNCTS: &[Token] = &[
-    Token { id: 5301, text: "with precision" },
-    Token { id: 5302, text: "during daylight" },
-    Token { id: 5303, text: "under supervision" },
-    Token { id: 5304, text: "without interruption" },
-    Token { id: 5305, text: "across regions" },
-    Token { id: 5306, text: "through coordination" },
-    Token { id: 5307, text: "after inspection" },
-    Token { id: 5308, text: "before sunrise" },
-    Token { id: 5309, text: "inside facilities" },
-    Token { id: 5310, text: "near headquarters" },
-    Token { id: 5311, text: "within parameters" },
-    Token { id: 5312, text: "beside operators" },
-    Token { id: 5313, text: "using safeguards" },
-    Token { id: 5314, text: "toward completion" },
-    Token { id: 5315, text: "despite pressure" },
-    Token { id: 5316, text: "for stability" },
+    Token {
+        id: 5301,
+        text: "with precision",
+    },
+    Token {
+        id: 5302,
+        text: "during daylight",
+    },
+    Token {
+        id: 5303,
+        text: "under supervision",
+    },
+    Token {
+        id: 5304,
+        text: "without interruption",
+    },
+    Token {
+        id: 5305,
+        text: "across regions",
+    },
+    Token {
+        id: 5306,
+        text: "through coordination",
+    },
+    Token {
+        id: 5307,
+        text: "after inspection",
+    },
+    Token {
+        id: 5308,
+        text: "before sunrise",
+    },
+    Token {
+        id: 5309,
+        text: "inside facilities",
+    },
+    Token {
+        id: 5310,
+        text: "near headquarters",
+    },
+    Token {
+        id: 5311,
+        text: "within parameters",
+    },
+    Token {
+        id: 5312,
+        text: "beside operators",
+    },
+    Token {
+        id: 5313,
+        text: "using safeguards",
+    },
+    Token {
+        id: 5314,
+        text: "toward completion",
+    },
+    Token {
+        id: 5315,
+        text: "despite pressure",
+    },
+    Token {
+        id: 5316,
+        text: "for stability",
+    },
 ];
 
 pub const MIN_GENERATED_WORDS: usize = 3;
@@ -718,14 +828,138 @@ pub fn verify_with_profile(output: &Output, intent: &IntentFrame, profile: &Prof
 
 /// Recovers the complete original integer from the residual and trace.
 pub fn recover_integer(output: &Output) -> Result<BigNat, Error> {
-    let mut number = output.residual.clone();
-    for event in output.trace.iter().rev() {
+    recover_from_trace(&output.residual, &output.trace)
+}
+
+fn recover_from_trace(residual: &BigNat, trace: &[TraceEvent]) -> Result<BigNat, Error> {
+    let mut number = residual.clone();
+    for event in trace.iter().rev() {
         if event.index >= event.radix {
             return Err(Error::VerificationFailure);
         }
         number.mul_add_small(event.radix, event.index);
     }
     Ok(number)
+}
+
+/// Provides enough source bits to keep long generated sentences varied while
+/// retaining a 256-bit minimum for ordinary terminal use.
+pub fn recommended_choice_bits(words: usize) -> u32 {
+    let scaled = words.saturating_mul(8).min(u32::MAX as usize) as u32;
+    scaled.max(256)
+}
+
+fn render_generated(meaning: &GeneratedMeaning) -> String {
+    let mut words =
+        Vec::with_capacity(3 + usize::from(meaning.manner.is_some()) + meaning.adjuncts.len() * 2);
+    words.extend(meaning.subject.text.split_whitespace());
+    if let Some(manner) = meaning.manner {
+        words.push(manner.text);
+    }
+    words.push(meaning.verb.text);
+    for adjunct in &meaning.adjuncts {
+        words.extend(adjunct.text.split_whitespace());
+    }
+    let mut sentence = words.join(" ");
+    if let Some(first) = sentence.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    sentence.push('.');
+    sentence
+}
+
+fn word_count(sentence: &str) -> usize {
+    sentence.split_whitespace().count()
+}
+
+/// Generates a controlled-English sentence whose complete meaning is chosen
+/// from `choice`, with exactly `requested_words` orthographic words.
+pub fn generate(choice: &ChoiceState, requested_words: usize) -> Result<GeneratedOutput, Error> {
+    if !(MIN_GENERATED_WORDS..=MAX_GENERATED_WORDS).contains(&requested_words) {
+        return Err(Error::NoRealization(
+            "requested word count must be between 3 and 4096",
+        ));
+    }
+
+    let mut residual = choice.integer.clone();
+    let mut trace = Vec::new();
+    let (subject, _) = select(
+        &mut residual,
+        "generated_subject",
+        FREE_SUBJECTS,
+        &mut trace,
+    );
+    let (verb, _) = select(&mut residual, "generated_verb", FREE_VERBS, &mut trace);
+
+    let remaining = requested_words - 3;
+    let manner = if remaining % 2 == 1 {
+        Some(select(&mut residual, "generated_manner", FREE_ADVERBS, &mut trace).0)
+    } else {
+        None
+    };
+
+    let adjunct_count = remaining / 2;
+    let mut adjuncts = Vec::with_capacity(adjunct_count);
+    let mut used_ids = Vec::with_capacity(FREE_ADJUNCTS.len());
+    for _ in 0..adjunct_count {
+        let mut candidates: Vec<_> = FREE_ADJUNCTS
+            .iter()
+            .copied()
+            .filter(|token| !used_ids.contains(&token.id))
+            .collect();
+        if candidates.is_empty() {
+            used_ids.clear();
+            candidates.extend_from_slice(FREE_ADJUNCTS);
+        }
+        let (adjunct, _) = select(&mut residual, "generated_adjunct", &candidates, &mut trace);
+        used_ids.push(adjunct.id);
+        adjuncts.push(adjunct);
+    }
+
+    let meaning = GeneratedMeaning {
+        subject,
+        verb,
+        manner,
+        adjuncts,
+    };
+    let output = GeneratedOutput {
+        sentence: render_generated(&meaning),
+        meaning,
+        requested_words,
+        declared_bits: choice.declared_bits,
+        residual,
+        trace,
+        spec_version: SPEC_VERSION,
+        grammar_version: GRAMMAR_VERSION,
+        lexicon_version: LEXICON_VERSION,
+    };
+    if !verify_generated(&output) {
+        return Err(Error::VerificationFailure);
+    }
+    Ok(output)
+}
+
+pub fn verify_generated(output: &GeneratedOutput) -> bool {
+    let meaning = &output.meaning;
+    let tokens_valid = FREE_SUBJECTS.contains(&meaning.subject)
+        && FREE_VERBS.contains(&meaning.verb)
+        && meaning
+            .manner
+            .is_none_or(|token| FREE_ADVERBS.contains(&token))
+        && meaning
+            .adjuncts
+            .iter()
+            .all(|token| FREE_ADJUNCTS.contains(token));
+    tokens_valid
+        && output.spec_version == SPEC_VERSION
+        && output.grammar_version == GRAMMAR_VERSION
+        && output.lexicon_version == LEXICON_VERSION
+        && render_generated(meaning) == output.sentence
+        && word_count(&output.sentence) == output.requested_words
+}
+
+pub fn recover_generated_integer(output: &GeneratedOutput) -> Result<BigNat, Error> {
+    recover_from_trace(&output.residual, &output.trace)
 }
 
 /// Optional numeric-source adapter. SMC supplies data; it does not change the
@@ -869,5 +1103,45 @@ mod tests {
             assert_eq!(choice.declared_bits, bits);
             assert!(choice.integer.bit_len() <= bits);
         }
+    }
+
+    #[test]
+    fn free_generation_has_every_requested_word_count() {
+        let choice = ChoiceState::from_hex(
+            256,
+            "8F2A00000000000000000000000000000000000000000000000000000000D91C",
+        )
+        .unwrap();
+        for words in MIN_GENERATED_WORDS..=128 {
+            let output = generate(&choice, words).unwrap();
+            assert_eq!(word_count(&output.sentence), words);
+            assert!(verify_generated(&output));
+            assert_eq!(recover_generated_integer(&output).unwrap(), choice.integer);
+        }
+        let maximum = generate(&choice, MAX_GENERATED_WORDS).unwrap();
+        assert_eq!(word_count(&maximum.sentence), MAX_GENERATED_WORDS);
+        assert!(verify_generated(&maximum));
+        assert_eq!(recover_generated_integer(&maximum).unwrap(), choice.integer);
+    }
+
+    #[test]
+    fn free_generation_is_deterministic_and_detects_tampering() {
+        let choice = ChoiceState::from_hex(64, "DEADBEEF01234567").unwrap();
+        let first = generate(&choice, 24).unwrap();
+        let second = generate(&choice, 24).unwrap();
+        assert_eq!(first, second);
+
+        let mut tampered = first;
+        tampered.sentence.push_str(" unexpectedly");
+        assert!(!verify_generated(&tampered));
+    }
+
+    #[test]
+    fn free_generation_enforces_budget() {
+        let choice = ChoiceState::new(0, BigNat::zero()).unwrap();
+        assert!(generate(&choice, MIN_GENERATED_WORDS - 1).is_err());
+        assert!(generate(&choice, MAX_GENERATED_WORDS + 1).is_err());
+        assert_eq!(recommended_choice_bits(3), 256);
+        assert_eq!(recommended_choice_bits(100), 800);
     }
 }
