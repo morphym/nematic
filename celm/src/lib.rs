@@ -453,6 +453,79 @@ const ADVERB_FORMS: &[Token] = &[
     },
 ];
 
+const FREE_SUBJECTS: &[Token] = &[
+    Token { id: 5001, text: "the engine" },
+    Token { id: 5002, text: "the system" },
+    Token { id: 5003, text: "the runtime" },
+    Token { id: 5004, text: "the service" },
+    Token { id: 5005, text: "the network" },
+    Token { id: 5006, text: "the process" },
+    Token { id: 5007, text: "the device" },
+    Token { id: 5008, text: "the mechanism" },
+];
+
+const FREE_VERBS: &[Token] = &[
+    Token { id: 5101, text: "operates" },
+    Token { id: 5102, text: "functions" },
+    Token { id: 5103, text: "responds" },
+    Token { id: 5104, text: "continues" },
+];
+
+const FREE_ADVERBS: &[Token] = &[
+    Token { id: 5201, text: "steadily" },
+    Token { id: 5202, text: "reliably" },
+    Token { id: 5203, text: "quietly" },
+    Token { id: 5204, text: "independently" },
+    Token { id: 5205, text: "continuously" },
+    Token { id: 5206, text: "efficiently" },
+];
+
+// Every adjunct is exactly two orthographic words. This gives the grammar an
+// exact length construction without filler tokens or truncation.
+const FREE_ADJUNCTS: &[Token] = &[
+    Token { id: 5301, text: "with precision" },
+    Token { id: 5302, text: "during daylight" },
+    Token { id: 5303, text: "under supervision" },
+    Token { id: 5304, text: "without interruption" },
+    Token { id: 5305, text: "across regions" },
+    Token { id: 5306, text: "through coordination" },
+    Token { id: 5307, text: "after inspection" },
+    Token { id: 5308, text: "before sunrise" },
+    Token { id: 5309, text: "inside facilities" },
+    Token { id: 5310, text: "near headquarters" },
+    Token { id: 5311, text: "within parameters" },
+    Token { id: 5312, text: "beside operators" },
+    Token { id: 5313, text: "using safeguards" },
+    Token { id: 5314, text: "toward completion" },
+    Token { id: 5315, text: "despite pressure" },
+    Token { id: 5316, text: "for stability" },
+];
+
+pub const MIN_GENERATED_WORDS: usize = 3;
+pub const MAX_GENERATED_WORDS: usize = 4096;
+
+/// A meaning chosen by the number rather than supplied by a controller.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GeneratedMeaning {
+    pub subject: Token,
+    pub verb: Token,
+    pub manner: Option<Token>,
+    pub adjuncts: Vec<Token>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GeneratedOutput {
+    pub sentence: String,
+    pub meaning: GeneratedMeaning,
+    pub requested_words: usize,
+    pub declared_bits: u32,
+    pub residual: BigNat,
+    pub trace: Vec<TraceEvent>,
+    pub spec_version: &'static str,
+    pub grammar_version: &'static str,
+    pub lexicon_version: &'static str,
+}
+
 /// The immutable CELM-EN1 package exposed as queryable profile data.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Profile;
