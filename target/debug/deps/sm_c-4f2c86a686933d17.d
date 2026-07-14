@@ -1,0 +1,9 @@
+/Users/pawit/projects/vasudeva/entity-c/target/debug/deps/sm_c-4f2c86a686933d17.d: smc/src/main.rs Cargo.toml
+
+/Users/pawit/projects/vasudeva/entity-c/target/debug/deps/libsm_c-4f2c86a686933d17.rmeta: smc/src/main.rs Cargo.toml
+
+smc/src/main.rs:
+Cargo.toml:
+
+# env-dep:CLIPPY_ARGS=-D__CLIPPY_HACKERY__warnings__CLIPPY_HACKERY__
+# env-dep:CLIPPY_CONF_DIR

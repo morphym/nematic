@@ -1,0 +1,9 @@
+[package]
+name = "celm"
+version = "0.1.0"
+edition = "2024"
+description = "Constrained Entropy Language Machine: deterministic controlled-English decoding"
+license = "MIT"
+
+[dependencies]
+sm-c = { path = "../smc" }
